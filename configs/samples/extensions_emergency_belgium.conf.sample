@@ -38,8 +38,12 @@
 
 [globals]
 ; Define your PSTN trunk for emergency calls
-; This should be a reliable, high-priority trunk
+; This should be a reliable, high-priority trunk dedicated to emergency services
 EMERGENCY_TRUNK=PJSIP/emergency-trunk
+; Define a backup trunk for emergency calls in case primary fails
+EMERGENCY_TRUNK_BACKUP=PJSIP/emergency-trunk-backup
+; Define a separate trunk for regular outbound calls (non-emergency)
+OUTBOUND_TRUNK=PJSIP/outbound-trunk
 
 ; Define emergency routing destinations per zone/city
 ; Format: ZoneName_POLICE, ZoneName_FIRE, ZoneName_MEDICAL
@@ -149,11 +153,12 @@ exten => 100,1,NoOp(=== EMERGENCY CALL 100 FIRE/MEDICAL from ${CALLERID(num)} ==
 ; Common emergency dialing handler
 exten => dial_emergency,1,NoOp(Dialing emergency: ${EMERGENCY_DEST})
  same => n,Verbose(1,EMERGENCY: Routing to ${EMERGENCY_DEST} via ${GLOBAL(EMERGENCY_TRUNK)})
- ; Dial with high priority, no timeout (let the call connect and stay)
- same => n,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EMERGENCY_DEST},,)
+ ; Dial with 120 second timeout (reasonable for emergency calls)
+ ; Using 'o' option to use original CallerID
+ same => n,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EMERGENCY_DEST},120,o)
  ; If the primary trunk fails, try the backup
  same => n,Verbose(1,EMERGENCY: Primary trunk failed, attempting backup)
- same => n,Dial(${GLOBAL(EMERGENCY_TRUNK_BACKUP)}/${EMERGENCY_DEST},,)
+ same => n,Dial(${GLOBAL(EMERGENCY_TRUNK_BACKUP)}/${EMERGENCY_DEST},120,o)
  ; If all trunks fail, play error message
  same => n,Playback(ss-noservice)
  same => n,Hangup()
@@ -276,16 +281,18 @@ exten => _4XXX,1,Dial(PJSIP/${EXTEN},30)
  same => n,Hangup()
 
 ; External dialing - Belgian numbers
+; NOTE: Using a separate outbound trunk for non-emergency calls to ensure
+; emergency trunk bandwidth and priority is preserved
 ; Mobile: 04XX XXX XXX
-exten => _04XXXXXXXX,1,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EXTEN})
+exten => _04XXXXXXXX,1,Dial(${GLOBAL(OUTBOUND_TRUNK)}/${EXTEN})
  same => n,Hangup()
 
 ; Landline: 0X XXX XX XX or 0XX XX XX XX
-exten => _0XXXXXXXX,1,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EXTEN})
+exten => _0XXXXXXXX,1,Dial(${GLOBAL(OUTBOUND_TRUNK)}/${EXTEN})
  same => n,Hangup()
 
 ; International: 00 XX ...
-exten => _00.,1,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EXTEN})
+exten => _00.,1,Dial(${GLOBAL(OUTBOUND_TRUNK)}/${EXTEN})
  same => n,Hangup()
 
 ; =============================================================================
