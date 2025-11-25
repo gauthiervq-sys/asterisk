@@ -1,0 +1,327 @@
+; geolocation_belgium.conf.sample - Belgium E112 Geolocation Configuration Example
+;
+; This sample configuration demonstrates how to configure geolocation
+; for Belgium emergency (E112) services using the res_geolocation module.
+;
+; IMPORTANT NOTICE:
+; -----------------
+; This configuration is for use with Belgium's E112 emergency services.
+; Before deploying:
+; 1. Verify with your VoIP provider that they support geolocation/PIDF-LO
+; 2. Coordinate with BIPT for E112 compliance requirements
+; 3. Test thoroughly with your provider's test facilities
+; 4. Ensure location information is accurate for all endpoints
+;
+; =============================================================================
+; LOCATION OBJECTS - Define physical locations for your offices/endpoints
+; =============================================================================
+
+; -----------------------------------------------------------------------------
+; Ghent Office Location
+; Address: Korenmarkt 1, 9000 Gent, Belgium
+; -----------------------------------------------------------------------------
+[ghent-office-building]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+; Belgian Civic Address elements
+; country: ISO 3166-1 alpha-2 country code
+; A1: Province (Provincie/Province)
+; A3: City (Gemeente/Commune)
+; A4: District/Neighborhood if applicable
+; RD: Street name (Straatnaam/Nom de rue)
+; HNO: House number (Huisnummer/Numéro de maison)
+; PC: Postal code (Postcode/Code postal)
+location_info = country=BE, A1=Oost-Vlaanderen, A3=Gent
+location_info = RD=Korenmarkt, HNO=1, PC=9000
+
+; Ghent office - Floor 1, Reception
+[ghent-reception]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+location_info = country=BE, A1=Oost-Vlaanderen, A3=Gent
+location_info = RD=Korenmarkt, HNO=1, PC=9000
+location_info = FLR=1, NAM="Reception"
+
+; Ghent office - Floor 2, Conference Room A
+[ghent-floor2-confroom-a]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+location_info = country=BE, A1=Oost-Vlaanderen, A3=Gent
+location_info = RD=Korenmarkt, HNO=1, PC=9000
+location_info = FLR=2, ROOM=A, NAM="Conference Room A"
+
+; -----------------------------------------------------------------------------
+; Brussels Office Location
+; Address: Grand-Place 1, 1000 Brussels, Belgium
+; -----------------------------------------------------------------------------
+[brussels-office-building]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+; Brussels is bilingual (French/Dutch), use appropriate naming
+location_info = country=BE, A1=Bruxelles-Capitale, A3=Bruxelles
+location_info = RD=Grand-Place, HNO=1, PC=1000
+
+; Brussels office - Floor 3, IT Department
+[brussels-floor3-it]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+location_info = country=BE, A1=Bruxelles-Capitale, A3=Bruxelles
+location_info = RD=Grand-Place, HNO=1, PC=1000
+location_info = FLR=3, NAM="IT Department"
+
+; Brussels office - Floor 5, Executive Suite
+[brussels-floor5-exec]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+location_info = country=BE, A1=Bruxelles-Capitale, A3=Bruxelles
+location_info = RD=Grand-Place, HNO=1, PC=1000
+location_info = FLR=5, NAM="Executive Suite"
+
+; -----------------------------------------------------------------------------
+; Antwerp Office Location
+; Address: Grote Markt 1, 2000 Antwerpen, Belgium
+; -----------------------------------------------------------------------------
+[antwerp-office-building]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+location_info = country=BE, A1=Antwerpen, A3=Antwerpen
+location_info = RD=Grote Markt, HNO=1, PC=2000
+
+; Antwerp office - Floor 1, Sales
+[antwerp-floor1-sales]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+location_info = country=BE, A1=Antwerpen, A3=Antwerpen
+location_info = RD=Grote Markt, HNO=1, PC=2000
+location_info = FLR=1, NAM="Sales Department"
+
+; -----------------------------------------------------------------------------
+; Liège Office Location
+; Address: Place Saint-Lambert 1, 4000 Liège, Belgium
+; -----------------------------------------------------------------------------
+[liege-office-building]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+; Liège is in Wallonia (French-speaking)
+location_info = country=BE, A1=Liège, A3=Liège
+location_info = RD=Place Saint-Lambert, HNO=1, PC=4000
+
+; Liège office - Floor 2, Operations
+[liege-floor2-ops]
+type = location
+format = civicAddress
+method = Manual
+location_source = pbx.example.be
+location_info = country=BE, A1=Liège, A3=Liège
+location_info = RD=Place Saint-Lambert, HNO=1, PC=4000
+location_info = FLR=2, NAM="Operations"
+
+; =============================================================================
+; PROFILE OBJECTS - Define how location information is handled
+; =============================================================================
+
+; -----------------------------------------------------------------------------
+; Profile for Ghent office phones - uses building location with floor refinement
+; -----------------------------------------------------------------------------
+[profile-ghent-reception]
+type = profile
+location_reference = ghent-reception
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+[profile-ghent-floor2]
+type = profile
+location_reference = ghent-office-building
+; Refine the building location with floor/room info
+location_info_refinement = FLR=2
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+; Profile that uses channel variables for dynamic room assignment
+[profile-ghent-dynamic]
+type = profile
+location_reference = ghent-office-building
+; ${ROOM} will be set by the dialplan or endpoint
+location_info_refinement = FLR=${FLOOR}, ROOM=${ROOM}
+suppress_empty_ca_elements = yes
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+; -----------------------------------------------------------------------------
+; Profiles for Brussels office phones
+; -----------------------------------------------------------------------------
+[profile-brussels-it]
+type = profile
+location_reference = brussels-floor3-it
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+[profile-brussels-exec]
+type = profile
+location_reference = brussels-floor5-exec
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+; -----------------------------------------------------------------------------
+; Profiles for Antwerp office phones
+; -----------------------------------------------------------------------------
+[profile-antwerp-sales]
+type = profile
+location_reference = antwerp-floor1-sales
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+; -----------------------------------------------------------------------------
+; Profiles for Liège office phones
+; -----------------------------------------------------------------------------
+[profile-liege-ops]
+type = profile
+location_reference = liege-floor2-ops
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+; =============================================================================
+; GML (Geographic Markup Language) EXAMPLES
+; =============================================================================
+; If you have GPS coordinates for your locations, you can use GML format
+; This is particularly useful for mobile workers or when exact coordinates
+; are required by your emergency services provider
+
+; Ghent office with GPS coordinates
+[ghent-gml]
+type = location
+format = GML
+method = Manual
+location_source = pbx.example.be
+; Point location with latitude longitude (WGS84)
+; Ghent city center approximate coordinates
+location_info = shape=Point, crs=2d, pos="51.0543 3.7174"
+
+[profile-ghent-gml]
+type = profile
+location_reference = ghent-gml
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+; Brussels office with GPS coordinates and confidence circle
+[brussels-gml-circle]
+type = location
+format = GML
+method = Manual
+location_source = pbx.example.be
+; Circle shape with center point and radius in meters
+; Grand-Place Brussels approximate coordinates
+location_info = shape=Circle, crs=2d, pos="50.8467 4.3525", radius=50
+
+[profile-brussels-gml]
+type = profile
+location_reference = brussels-gml-circle
+pidf_element = device
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+; =============================================================================
+; URI-BASED LOCATION (Reference to external location server)
+; =============================================================================
+; If you have a Location Information Server (LIS) or use your provider's
+; location service, you can reference it by URI
+
+[location-uri-example]
+type = location
+format = URI
+; The URI should point to a PIDF-LO document
+; ${EXTEN} will be replaced with the caller's extension at runtime
+location_info = URI=https://lis.example.be/location?ext=${EXTEN}
+
+[profile-uri-example]
+type = profile
+location_reference = location-uri-example
+allow_routing_use = yes
+profile_precedence = discard_incoming
+
+; =============================================================================
+; EXAMPLE PJSIP ENDPOINT CONFIGURATION
+; =============================================================================
+; Add these parameters to your endpoints in pjsip.conf
+;
+; [phone-ghent-reception]
+; type=endpoint
+; ; ... other endpoint parameters ...
+; geoloc_incoming_call_profile = <discard_incoming>
+; geoloc_outgoing_call_profile = profile-ghent-reception
+;
+; [phone-brussels-it-desk1]
+; type=endpoint
+; ; ... other endpoint parameters ...
+; geoloc_incoming_call_profile = <discard_incoming>
+; geoloc_outgoing_call_profile = profile-brussels-it
+;
+; [emergency-trunk]
+; type=endpoint
+; ; ... trunk configuration ...
+; ; For the emergency trunk, use prefer_incoming to pass through
+; ; the location from the calling phone
+; geoloc_incoming_call_profile = <prefer_incoming>
+; geoloc_outgoing_call_profile = <prefer_incoming>
+
+; =============================================================================
+; NOTES
+; =============================================================================
+;
+; Belgian Civic Address Elements commonly used:
+; - country: BE (ISO 3166-1 alpha-2)
+; - A1: Province (e.g., Oost-Vlaanderen, Antwerpen, Liège, Bruxelles-Capitale)
+; - A3: City/Municipality (Gemeente/Commune)
+; - A4: District/Neighborhood (optional)
+; - RD: Street name
+; - HNO: House number
+; - HNS: House number suffix (e.g., "A", "bis")
+; - PC: Postal code
+; - FLR: Floor
+; - ROOM: Room number
+; - NAM: Name/description of location
+;
+; Belgian Provinces for A1:
+; - Antwerpen
+; - Brabant wallon
+; - Bruxelles-Capitale / Brussels Hoofdstedelijk (bilingual)
+; - Hainaut
+; - Liège
+; - Limburg
+; - Luxembourg
+; - Namur
+; - Oost-Vlaanderen
+; - Vlaams-Brabant
+; - West-Vlaanderen
+;
+; For the most up-to-date information on E112 requirements in Belgium,
+; consult the Belgian Institute for Postal Services and Telecommunications
+; (BIPT/IBPT): https://www.bipt.be
+;
+; =============================================================================

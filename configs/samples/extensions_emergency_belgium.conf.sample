@@ -1,0 +1,344 @@
+; extensions_emergency_belgium.conf.sample - Belgium Emergency 112 Routing Example
+;
+; This sample configuration demonstrates how to route emergency 112 calls
+; in Belgium to the appropriate local emergency services (police, fire, medical)
+; based on the caller's location.
+;
+; IMPORTANT NOTICE:
+; -----------------
+; Emergency call routing is CRITICAL and must comply with local regulations.
+; Before deploying any emergency call routing configuration:
+; 1. Consult with your local telecommunications authority (BIPT in Belgium)
+; 2. Verify all emergency numbers and routing with your PSTN/VoIP provider
+; 3. Test thoroughly in a controlled environment
+; 4. Ensure you have failover mechanisms in place
+; 5. Keep this configuration updated as emergency services evolve
+;
+; In Belgium, the emergency number 112 is the European emergency number that
+; reaches emergency services. The actual routing to local emergency centers
+; (PSAP - Public Safety Answering Point) is typically handled by the
+; telecommunications provider based on the caller's location.
+;
+; However, if you need to route calls within your PBX to specific local
+; emergency contacts, this example shows various approaches.
+;
+; BELGIAN EMERGENCY NUMBERS:
+; 112 - European Emergency Number (police, fire, ambulance)
+; 101 - Police
+; 100 - Fire Brigade / Ambulance
+; 1733 - Non-urgent medical assistance (on-call doctor)
+; 070 245 245 - Poison Control Center
+;
+; =============================================================================
+; APPROACH 1: Route based on caller extension/location mapping
+; =============================================================================
+;
+; This approach uses a mapping between internal extensions and their physical
+; locations to route emergency calls to the appropriate local authorities.
+
+[globals]
+; Define your PSTN trunk for emergency calls
+; This should be a reliable, high-priority trunk
+EMERGENCY_TRUNK=PJSIP/emergency-trunk
+
+; Define emergency routing destinations per zone/city
+; Format: ZoneName_POLICE, ZoneName_FIRE, ZoneName_MEDICAL
+;
+; GHENT (Zone Gent)
+; Police Zone Gent: covers Gent city
+GHENT_POLICE=+3292662611
+GHENT_FIRE=+32100
+GHENT_MEDICAL=+32100
+
+; BRUSSELS (Zone Brussels Capital)
+; Federal Police Brussels
+BRUSSELS_POLICE=+3222793911
+BRUSSELS_FIRE=+32100
+BRUSSELS_MEDICAL=+32100
+
+; ANTWERP (Zone Antwerpen)
+ANTWERP_POLICE=+3233388811
+ANTWERP_FIRE=+32100
+ANTWERP_MEDICAL=+32100
+
+; LIEGE (Zone Liège)
+LIEGE_POLICE=+3242208111
+LIEGE_FIRE=+32100
+LIEGE_MEDICAL=+32100
+
+; DEFAULT - Falls back to national emergency number via trunk
+DEFAULT_POLICE=112
+DEFAULT_FIRE=100
+DEFAULT_MEDICAL=100
+
+; =============================================================================
+; Extension to Zone Mapping
+; =============================================================================
+; Define which extensions belong to which zone
+; This is typically based on physical location of the phone/user
+
+[extension-zone-mapping]
+; Ghent office extensions: 1000-1999
+exten => _1XXX,1,Set(CALLER_ZONE=GHENT)
+ same => n,Return()
+
+; Brussels office extensions: 2000-2999
+exten => _2XXX,1,Set(CALLER_ZONE=BRUSSELS)
+ same => n,Return()
+
+; Antwerp office extensions: 3000-3999
+exten => _3XXX,1,Set(CALLER_ZONE=ANTWERP)
+ same => n,Return()
+
+; Liege office extensions: 4000-4999
+exten => _4XXX,1,Set(CALLER_ZONE=LIEGE)
+ same => n,Return()
+
+; Default for unknown extensions
+exten => _X.,1,Set(CALLER_ZONE=DEFAULT)
+ same => n,Return()
+
+; =============================================================================
+; Emergency Call Routing Context
+; =============================================================================
+
+[emergency-belgium]
+; Include this context in your user contexts to enable emergency dialing
+; Example: include => emergency-belgium
+
+; 112 - European Emergency Number
+; Routes to appropriate local police based on caller's zone
+exten => 112,1,NoOp(=== EMERGENCY CALL 112 from ${CALLERID(num)} ===)
+ same => n,Set(CDR(userfield)=EMERGENCY-112)
+ same => n,Set(TIMEOUT(absolute)=3600)
+ ; Determine caller's zone based on their extension
+ same => n,Gosub(extension-zone-mapping,${CALLERID(num)},1)
+ ; Log the emergency call
+ same => n,Verbose(1,EMERGENCY: Caller ${CALLERID(num)} from zone ${CALLER_ZONE} dialed 112)
+ ; Route to the appropriate police number for the zone
+ same => n,Set(EMERGENCY_DEST=${GLOBAL(${CALLER_ZONE}_POLICE)})
+ same => n,GotoIf($["${EMERGENCY_DEST}" = ""]?use_default)
+ same => n,Goto(dial_emergency,1)
+ same => n(use_default),Set(EMERGENCY_DEST=112)
+ same => n,Goto(dial_emergency,1)
+
+; 101 - Police
+exten => 101,1,NoOp(=== EMERGENCY CALL 101 POLICE from ${CALLERID(num)} ===)
+ same => n,Set(CDR(userfield)=EMERGENCY-101-POLICE)
+ same => n,Set(TIMEOUT(absolute)=3600)
+ same => n,Gosub(extension-zone-mapping,${CALLERID(num)},1)
+ same => n,Verbose(1,EMERGENCY: Caller ${CALLERID(num)} from zone ${CALLER_ZONE} dialed 101 POLICE)
+ same => n,Set(EMERGENCY_DEST=${GLOBAL(${CALLER_ZONE}_POLICE)})
+ same => n,GotoIf($["${EMERGENCY_DEST}" = ""]?use_default)
+ same => n,Goto(dial_emergency,1)
+ same => n(use_default),Set(EMERGENCY_DEST=101)
+ same => n,Goto(dial_emergency,1)
+
+; 100 - Fire Brigade / Ambulance
+exten => 100,1,NoOp(=== EMERGENCY CALL 100 FIRE/MEDICAL from ${CALLERID(num)} ===)
+ same => n,Set(CDR(userfield)=EMERGENCY-100-FIRE-MEDICAL)
+ same => n,Set(TIMEOUT(absolute)=3600)
+ same => n,Gosub(extension-zone-mapping,${CALLERID(num)},1)
+ same => n,Verbose(1,EMERGENCY: Caller ${CALLERID(num)} from zone ${CALLER_ZONE} dialed 100 FIRE/MEDICAL)
+ same => n,Set(EMERGENCY_DEST=${GLOBAL(${CALLER_ZONE}_FIRE)})
+ same => n,GotoIf($["${EMERGENCY_DEST}" = ""]?use_default)
+ same => n,Goto(dial_emergency,1)
+ same => n(use_default),Set(EMERGENCY_DEST=100)
+ same => n,Goto(dial_emergency,1)
+
+; Common emergency dialing handler
+exten => dial_emergency,1,NoOp(Dialing emergency: ${EMERGENCY_DEST})
+ same => n,Verbose(1,EMERGENCY: Routing to ${EMERGENCY_DEST} via ${GLOBAL(EMERGENCY_TRUNK)})
+ ; Dial with high priority, no timeout (let the call connect and stay)
+ same => n,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EMERGENCY_DEST},,)
+ ; If the primary trunk fails, try the backup
+ same => n,Verbose(1,EMERGENCY: Primary trunk failed, attempting backup)
+ same => n,Dial(${GLOBAL(EMERGENCY_TRUNK_BACKUP)}/${EMERGENCY_DEST},,)
+ ; If all trunks fail, play error message
+ same => n,Playback(ss-noservice)
+ same => n,Hangup()
+
+; =============================================================================
+; APPROACH 2: Route based on PJSIP endpoint location profile
+; =============================================================================
+;
+; This approach uses channel variables set by the PJSIP endpoint configuration.
+; In pjsip.conf, you would set a variable on each endpoint indicating its zone.
+;
+; Example pjsip.conf:
+; [phone-ghent-reception]
+; type=endpoint
+; ...
+; set_var=EMERGENCY_ZONE=GHENT
+;
+; [phone-brussels-office]
+; type=endpoint
+; ...
+; set_var=EMERGENCY_ZONE=BRUSSELS
+
+[emergency-belgium-by-endpoint]
+
+exten => 112,1,NoOp(=== EMERGENCY CALL 112 from ${CALLERID(num)} ===)
+ same => n,Set(CDR(userfield)=EMERGENCY-112)
+ same => n,Set(TIMEOUT(absolute)=3600)
+ ; Use the zone set by the endpoint
+ same => n,Set(CALLER_ZONE=${IF($["${EMERGENCY_ZONE}" != ""]?${EMERGENCY_ZONE}:DEFAULT)})
+ same => n,Verbose(1,EMERGENCY: Caller ${CALLERID(num)} zone ${CALLER_ZONE} dialed 112)
+ same => n,Set(EMERGENCY_DEST=${GLOBAL(${CALLER_ZONE}_POLICE)})
+ same => n,GotoIf($["${EMERGENCY_DEST}" = ""]?use_default)
+ same => n,Goto(dial_emergency,1)
+ same => n(use_default),Set(EMERGENCY_DEST=112)
+ same => n,Goto(dial_emergency,1)
+
+exten => dial_emergency,1,Goto(emergency-belgium,dial_emergency,1)
+
+; =============================================================================
+; APPROACH 3: Route based on database lookup
+; =============================================================================
+;
+; This approach uses the Asterisk database (AstDB) or an external database
+; to look up the caller's zone based on their extension or caller ID.
+;
+; First, populate the database:
+; CLI> database put emergency/zone 1001 GHENT
+; CLI> database put emergency/zone 2001 BRUSSELS
+;
+; Or use func_odbc to query an external database
+
+[emergency-belgium-database]
+
+exten => 112,1,NoOp(=== EMERGENCY CALL 112 from ${CALLERID(num)} ===)
+ same => n,Set(CDR(userfield)=EMERGENCY-112)
+ same => n,Set(TIMEOUT(absolute)=3600)
+ ; Look up zone from Asterisk database
+ same => n,Set(CALLER_ZONE=${DB(emergency/zone/${CALLERID(num)})})
+ same => n,Set(CALLER_ZONE=${IF($["${CALLER_ZONE}" != ""]?${CALLER_ZONE}:DEFAULT)})
+ same => n,Verbose(1,EMERGENCY: Caller ${CALLERID(num)} zone ${CALLER_ZONE} (from DB) dialed 112)
+ same => n,Set(EMERGENCY_DEST=${GLOBAL(${CALLER_ZONE}_POLICE)})
+ same => n,GotoIf($["${EMERGENCY_DEST}" = ""]?use_default)
+ same => n,Goto(dial_emergency,1)
+ same => n(use_default),Set(EMERGENCY_DEST=112)
+ same => n,Goto(dial_emergency,1)
+
+exten => dial_emergency,1,Goto(emergency-belgium,dial_emergency,1)
+
+; =============================================================================
+; APPROACH 4: Using Geolocation (for SIP carriers that support it)
+; =============================================================================
+;
+; If your SIP provider supports geolocation (PIDF-LO), you can use Asterisk's
+; res_geolocation module to convey location information to emergency services.
+;
+; See the geolocation.conf sample and documentation for details.
+; This is the recommended approach for E911/E112 compliance.
+;
+; Example geolocation.conf:
+;
+; [ghent-office]
+; type = location
+; format = civicAddress
+; method = Manual
+; location_info = country=BE, A1=Oost-Vlaanderen, A3=Gent
+; location_info = HNO=1, RD="Korenmarkt", PC=9000
+;
+; [ghent-profile]
+; type = profile
+; location_reference = ghent-office
+;
+; Then in pjsip.conf:
+; [emergency-trunk]
+; type=endpoint
+; geoloc_outgoing_call_profile = ghent-profile
+
+; =============================================================================
+; Example: Complete user context with emergency calling
+; =============================================================================
+
+[users-with-emergency]
+; Include emergency calling
+include => emergency-belgium
+
+; Regular internal dialing (4-digit extensions)
+exten => _1XXX,1,Dial(PJSIP/${EXTEN},30)
+ same => n,VoiceMail(${EXTEN}@default,u)
+ same => n,Hangup()
+
+exten => _2XXX,1,Dial(PJSIP/${EXTEN},30)
+ same => n,VoiceMail(${EXTEN}@default,u)
+ same => n,Hangup()
+
+exten => _3XXX,1,Dial(PJSIP/${EXTEN},30)
+ same => n,VoiceMail(${EXTEN}@default,u)
+ same => n,Hangup()
+
+exten => _4XXX,1,Dial(PJSIP/${EXTEN},30)
+ same => n,VoiceMail(${EXTEN}@default,u)
+ same => n,Hangup()
+
+; External dialing - Belgian numbers
+; Mobile: 04XX XXX XXX
+exten => _04XXXXXXXX,1,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EXTEN})
+ same => n,Hangup()
+
+; Landline: 0X XXX XX XX or 0XX XX XX XX
+exten => _0XXXXXXXX,1,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EXTEN})
+ same => n,Hangup()
+
+; International: 00 XX ...
+exten => _00.,1,Dial(${GLOBAL(EMERGENCY_TRUNK)}/${EXTEN})
+ same => n,Hangup()
+
+; =============================================================================
+; Emergency Call Monitoring and Alerting
+; =============================================================================
+;
+; It's recommended to set up monitoring for emergency calls to:
+; 1. Alert administrators when emergency calls are made
+; 2. Log all emergency calls for compliance
+; 3. Monitor trunk availability for emergency services
+;
+; Example using the System() application to send an alert:
+
+[emergency-alert]
+exten => s,1,NoOp(Sending emergency call alert)
+ same => n,System(echo "EMERGENCY CALL from ${CALLERID(num)} to ${EMERGENCY_DEST} at ${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)}" | mail -s "EMERGENCY CALL ALERT" admin@example.com)
+ same => n,Return()
+
+; Call this at the beginning of dial_emergency:
+; same => n,Gosub(emergency-alert,s,1)
+
+; =============================================================================
+; NOTES FOR PRODUCTION DEPLOYMENT
+; =============================================================================
+;
+; 1. TRUNK CONFIGURATION:
+;    - Use dedicated, high-priority trunks for emergency calls
+;    - Configure failover to multiple providers
+;    - Ensure trunks are monitored and alerts are set for downtime
+;
+; 2. TESTING:
+;    - Test emergency routing regularly (coordinate with authorities)
+;    - Use test numbers provided by your carrier if available
+;    - Document all test results
+;
+; 3. COMPLIANCE:
+;    - Belgium requires that emergency calls from VoIP systems include
+;      location information (E112)
+;    - Verify compliance with BIPT (Belgian Institute for Postal Services
+;      and Telecommunications) regulations
+;    - Keep records of emergency calls as required by law
+;
+; 4. CALLER ID:
+;    - Ensure proper caller ID is sent for emergency calls
+;    - Many jurisdictions require callbacks to emergency callers
+;
+; 5. LOCATION UPDATES:
+;    - If phones are mobile (softphones, remote workers), implement
+;      dynamic location updates
+;    - Consider using the geolocation module for accurate positioning
+;
+; 6. FAILOVER:
+;    - If VoIP fails, ensure PSTN backup is available
+;    - Consider having physical PSTN phones in critical areas
+;
+; =============================================================================
